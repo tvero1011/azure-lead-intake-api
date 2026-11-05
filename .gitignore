@@ -43,3 +43,8 @@ Thumbs.db
 
 # Azurite local storage emulator data
 .azurite/
+
+# Terraform plan files and review artifacts
+*.tfplan
+tfplan
+plan-review.txt

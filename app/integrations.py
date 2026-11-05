@@ -1,7 +1,10 @@
+
 import logging
 import os
 
 import requests
+
+from keyvault_secrets import get_secret
 
 
 logger = logging.getLogger("lead_intake.integrations")
@@ -11,12 +14,34 @@ def downstream_enabled() -> bool:
     return os.getenv("DOWNSTREAM_ENABLED", "false").lower() == "true"
 
 
+def _get_integration_secret(secret_name: str, env_name: str) -> str | None:
+    # Local development can use environment variables.
+    local_value = os.getenv(env_name)
+
+    if local_value:
+        return local_value
+
+    # Azure retrieves the secret from Key Vault.
+    try:
+        return get_secret(secret_name)
+    except Exception as exc:
+        logger.warning(
+            "Integration credential unavailable; secret=%s error=%s",
+            secret_name,
+            type(exc).__name__,
+        )
+        return None
+
+
 def sync_to_hubspot(lead: dict) -> bool:
     if not downstream_enabled():
         logger.info("HubSpot integration disabled.")
         return False
 
-    token = os.getenv("HUBSPOT_ACCESS_TOKEN")
+    token = _get_integration_secret(
+        "hubspot-access-token",
+        "HUBSPOT_ACCESS_TOKEN",
+    )
 
     if not token:
         logger.warning("HubSpot sync skipped: credential not configured.")
@@ -83,7 +108,10 @@ def notify_slack(lead: dict) -> bool:
         logger.info("Slack integration disabled.")
         return False
 
-    webhook_url = os.getenv("SLACK_WEBHOOK_URL")
+    webhook_url = _get_integration_secret(
+        "slack-webhook-url",
+        "SLACK_WEBHOOK_URL",
+    )
 
     if not webhook_url:
         logger.warning("Slack notification skipped: webhook not configured.")
