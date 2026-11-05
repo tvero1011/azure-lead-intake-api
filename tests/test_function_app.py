@@ -1,7 +1,7 @@
+
 import json
 from unittest.mock import Mock
 
-import pytest
 import azure.functions as func
 
 import function_app
@@ -30,15 +30,30 @@ def test_health_returns_200():
     assert response.headers.get("X-Correlation-ID")
 
 
-def test_create_lead_returns_403_without_role(monkeypatch):
+def test_create_lead_returns_401_without_identity(monkeypatch):
     monkeypatch.setattr(
         function_app,
-        "has_required_role",
-        lambda req: False,
+        "get_authorization_status",
+        lambda req: 401,
     )
 
     request = make_request("POST")
+    response = function_app.create_lead(request)
 
+    assert response.status_code == 401
+    assert json.loads(response.get_body())["error"] == (
+        "Authentication required."
+    )
+
+
+def test_create_lead_returns_403_without_role(monkeypatch):
+    monkeypatch.setattr(
+        function_app,
+        "get_authorization_status",
+        lambda req: 403,
+    )
+
+    request = make_request("POST")
     response = function_app.create_lead(request)
 
     assert response.status_code == 403
@@ -47,8 +62,8 @@ def test_create_lead_returns_403_without_role(monkeypatch):
 def test_create_lead_saves_valid_lead(monkeypatch):
     monkeypatch.setattr(
         function_app,
-        "has_required_role",
-        lambda req: True,
+        "get_authorization_status",
+        lambda req: 200,
     )
     save_mock = Mock()
     monkeypatch.setattr(function_app, "save_lead", save_mock)
@@ -74,8 +89,8 @@ def test_create_lead_saves_valid_lead(monkeypatch):
 def test_create_lead_returns_422_for_invalid_email(monkeypatch):
     monkeypatch.setattr(
         function_app,
-        "has_required_role",
-        lambda req: True,
+        "get_authorization_status",
+        lambda req: 200,
     )
 
     request = make_request(
@@ -95,8 +110,8 @@ def test_create_lead_returns_422_for_invalid_email(monkeypatch):
 def test_create_lead_returns_422_for_malformed_json(monkeypatch):
     monkeypatch.setattr(
         function_app,
-        "has_required_role",
-        lambda req: True,
+        "get_authorization_status",
+        lambda req: 200,
     )
 
     request = func.HttpRequest(

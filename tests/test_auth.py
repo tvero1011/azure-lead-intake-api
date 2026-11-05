@@ -1,8 +1,9 @@
+
 import base64
 import json
 from types import SimpleNamespace
 
-from auth import has_required_role
+from auth import get_authorization_status
 
 
 def make_request(claims=None):
@@ -28,31 +29,32 @@ def test_authorized_with_lead_write_role():
         {"typ": "roles", "val": "Lead.Write"}
     ])
 
-    assert has_required_role(request) is True
+    assert get_authorization_status(request) == 200
 
 
-def test_rejects_wrong_role():
+def test_forbidden_when_role_is_missing():
     request = make_request([
         {"typ": "roles", "val": "Lead.Read"}
     ])
 
-    assert has_required_role(request) is False
+    assert get_authorization_status(request) == 403
 
 
-def test_rejects_missing_principal_header():
+def test_unauthorized_when_principal_is_missing():
     request = make_request()
 
-    assert has_required_role(request) is False
+    assert get_authorization_status(request) == 401
 
-def test_rejects_malformed_base64():
+
+def test_unauthorized_with_malformed_base64():
     request = SimpleNamespace(
         headers={"x-ms-client-principal": "not-valid-base64!!!"}
     )
 
-    assert has_required_role(request) is False
+    assert get_authorization_status(request) == 401
 
 
-def test_rejects_malformed_principal_json():
+def test_unauthorized_with_malformed_principal_json():
     request = SimpleNamespace(
         headers={
             "x-ms-client-principal": base64.b64encode(
@@ -61,4 +63,4 @@ def test_rejects_malformed_principal_json():
         }
     )
 
-    assert has_required_role(request) is False
+    assert get_authorization_status(request) == 401

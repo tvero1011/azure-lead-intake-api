@@ -5,7 +5,8 @@ import uuid
 import azure.functions as func
 from pydantic import ValidationError
 
-from auth import has_required_role
+from auth import get_authorization_status
+
 from integrations import (
     downstream_enabled,
     notify_slack,
@@ -58,18 +59,24 @@ def create_lead(req: func.HttpRequest) -> func.HttpResponse:
     )
 
     # Step 1: Authorize the caller.
-    if not has_required_role(req):
+    auth_status = get_authorization_status(req)
+
+    if auth_status != 200:
         log_event(
             logger,
             event="lead_authorization_denied",
             correlation_id=correlation_id,
         )
 
+        error_message = (
+            "Authentication required."
+            if auth_status == 401
+            else "Forbidden: Lead.Write role required."
+        )
+
         return func.HttpResponse(
-            body=json.dumps({
-                "error": "Forbidden: Lead.Write role required."
-            }),
-            status_code=403,
+            body=json.dumps({"error": error_message}),
+            status_code=auth_status,
             mimetype="application/json",
             headers={"X-Correlation-ID": correlation_id},
         )

@@ -220,8 +220,8 @@ resource "azurerm_function_app_flex_consumption" "api" {
 
   auth_settings_v2 {
     auth_enabled           = true
-    require_authentication = true
-    unauthenticated_action = "Return401"
+    require_authentication = false
+    unauthenticated_action = "AllowAnonymous"
 
     active_directory_v2 {
       client_id = "bb85dbd3-4f25-4318-8f1d-47b436ce9edb"
