@@ -8,7 +8,11 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
+.mypy_cache/
+.ruff_cache/
+.tox/
 
 # Environment variables and secrets
 .env
