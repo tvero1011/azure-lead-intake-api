@@ -17,12 +17,6 @@ variable "application_resource_group_name" {
   default     = "rg-lead-intake"
 }
 
-variable "storage_account_prefix" {
-  description = "Prefix for the globally unique Terraform state storage account."
-  type        = string
-  default     = "stleadintake"
-}
-
 variable "allowed_locations" {
   description = "Azure regions permitted for application resources."
   type        = list(string)
