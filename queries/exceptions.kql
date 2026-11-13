@@ -1,0 +1,4 @@
+AppExceptions
+| where TimeGenerated > ago(24h)
+| project TimeGenerated, ExceptionType, ProblemId, OuterMessage, OperationId
+| order by TimeGenerated desc

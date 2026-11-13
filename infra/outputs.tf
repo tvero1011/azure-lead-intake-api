@@ -17,3 +17,8 @@ output "storage_table_endpoint" {
   description = "Azure Table Storage endpoint."
   value       = azurerm_storage_account.app.primary_table_endpoint
 }
+
+output "monitoring_dashboard_id" {
+  description = "Azure Portal monitoring dashboard resource ID."
+  value       = azurerm_portal_dashboard.lead_intake.id
+}

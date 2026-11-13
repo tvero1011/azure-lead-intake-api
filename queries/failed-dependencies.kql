@@ -1,0 +1,5 @@
+AppDependencies
+| where TimeGenerated > ago(24h)
+| where Success == false
+| project TimeGenerated, Name, Target, Type, ResultCode, DurationMs, OperationId
+| order by TimeGenerated desc

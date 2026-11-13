@@ -1,0 +1,5 @@
+AppRequests
+| where TimeGenerated > ago(24h)
+| where Success == false
+| project TimeGenerated, Name, ResultCode, DurationMs, OperationId
+| order by TimeGenerated desc

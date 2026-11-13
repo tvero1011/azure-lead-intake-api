@@ -1,0 +1,44 @@
+
+name: Scheduled API Health Check
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 1 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  health-check:
+    name: Check API health endpoint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate health URL configuration
+        env:
+          API_HEALTH_URL: ${{ vars.API_HEALTH_URL }}
+        run: |
+          if [ -z "$API_HEALTH_URL" ]; then
+            echo "API_HEALTH_URL repository variable is not configured."
+            exit 1
+          fi
+
+      - name: Call health endpoint
+        env:
+          API_HEALTH_URL: ${{ vars.API_HEALTH_URL }}
+        run: |
+          echo "Checking API health endpoint..."
+
+          response=$(curl \
+            --silent \
+            --show-error \
+            --fail \
+            --max-time 20 \
+            "$API_HEALTH_URL")
+
+          echo "$response"
+
+          echo "$response" | grep -q '"status"[[:space:]]*:[[:space:]]*"healthy"'
+
+          echo "Health check passed."

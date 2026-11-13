@@ -1,0 +1,9 @@
+AppRequests
+| where TimeGenerated > ago(24h)
+| summarize
+    TotalRequests = count(),
+    FailedRequests = countif(Success == false),
+    AverageDurationMs = round(avg(DurationMs), 2),
+    MaximumDurationMs = round(max(DurationMs), 2)
+    by bin(TimeGenerated, 1h)
+| order by TimeGenerated asc

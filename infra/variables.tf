@@ -32,3 +32,15 @@ variable "tags" {
     managed_by  = "terraform"
   }
 }
+
+
+variable "alert_email" {
+  description = "Email address receiving Azure Monitor alerts."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", var.alert_email))
+    error_message = "Provide a valid email address for Azure Monitor alerts."
+  }
+}

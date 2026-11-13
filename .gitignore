@@ -51,3 +51,7 @@ plan-review.txt
 
 # Local backup files
 *.bak
+
+# Local Terraform variable files
+*.tfvars
+!*.tfvars.example
