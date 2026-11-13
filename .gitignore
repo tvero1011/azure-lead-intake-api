@@ -48,3 +48,6 @@ Thumbs.db
 *.tfplan
 tfplan
 plan-review.txt
+
+# Local backup files
+*.bak
