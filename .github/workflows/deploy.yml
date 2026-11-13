@@ -9,6 +9,7 @@ on:
         required: true
         type: choice
         options:
+          - verify
           - apply
           - destroy
 
@@ -44,10 +45,15 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Verify Azure authentication
+        run: az account show --output table
+
       - name: Initialize Terraform
+        if: inputs.action != 'verify'
         run: terraform -chdir=infra init -input=false
 
       - name: Validate Terraform
+        if: inputs.action != 'verify'
         run: terraform -chdir=infra validate
 
       - name: Terraform Plan
@@ -61,3 +67,4 @@ jobs:
       - name: Terraform Destroy
         if: inputs.action == 'destroy'
         run: terraform -chdir=infra destroy -input=false -auto-approve
+
