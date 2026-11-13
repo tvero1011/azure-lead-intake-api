@@ -26,8 +26,7 @@ def _get_integration_secret(secret_name: str, env_name: str) -> str | None:
         return get_secret(secret_name)
     except Exception as exc:
         logger.warning(
-            "Integration credential unavailable; secret=%s error=%s",
-            secret_name,
+            "Integration credential unavailable; error=%s",
             type(exc).__name__,
         )
         return None
