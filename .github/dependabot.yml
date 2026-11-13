@@ -10,6 +10,9 @@ updates:
     directory: "/app"
     schedule:
       interval: "weekly"
+    ignore:
+      - dependency-name: "azure-functions"
+        versions: [">=2.0.0"]
 
   - package-ecosystem: "terraform"
     directory: "/infra"
