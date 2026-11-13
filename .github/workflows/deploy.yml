@@ -49,11 +49,9 @@ jobs:
         run: az account show --output table
 
       - name: Initialize Terraform
-        if: inputs.action != 'verify'
         run: terraform -chdir=infra init -input=false
 
       - name: Validate Terraform
-        if: inputs.action != 'verify'
         run: terraform -chdir=infra validate
 
       - name: Terraform Plan
