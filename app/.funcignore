@@ -1,0 +1,9 @@
+.venv/
+.python_packages/
+__pycache__/
+.pytest_cache/
+*.pyc
+local.settings.json
+.vscode/
+.git/
+tests/

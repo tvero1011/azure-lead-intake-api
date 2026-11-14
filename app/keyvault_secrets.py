@@ -7,10 +7,10 @@ from azure.keyvault.secrets import SecretClient
 
 @lru_cache(maxsize=1)
 def get_secret_client() -> SecretClient:
-    vault_url = os.getenv("KEY_VAULT_URL")
+    vault_url = os.getenv("KEY_VAULT_URI")
 
     if not vault_url:
-        raise RuntimeError("KEY_VAULT_URL is not configured.")
+        raise RuntimeError("KEY_VAULT_URI is not configured.")
 
     client_id = os.getenv("AZURE_CLIENT_ID")
 

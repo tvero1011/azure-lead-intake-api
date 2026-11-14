@@ -17,14 +17,14 @@ resource "azurerm_monitor_action_group" "email" {
   tags = var.tags
 }
 
-# Alert when at least one failed request is recorded
-# in a five-minute evaluation window.
+# Alert when Application Insights records at least one
+# failed request in a five-minute evaluation window.
 resource "azurerm_monitor_metric_alert" "failed_requests" {
-  name                = "alert-lead-intake-http5xx"
+  name                = "alert-lead-intake-failed-requests"
   resource_group_name = data.azurerm_resource_group.app.name
-  scopes              = [azurerm_function_app_flex_consumption.api.id]
+  scopes              = [azurerm_application_insights.function.id]
 
-  description   = "Alerts when the Lead Intake Function App returns HTTP 5xx errors."
+  description   = "Alerts when Application Insights records failed HTTP requests."
   severity      = 2
   enabled       = true
   frequency     = "PT1M"
@@ -32,9 +32,9 @@ resource "azurerm_monitor_metric_alert" "failed_requests" {
   auto_mitigate = true
 
   criteria {
-    metric_namespace = "Microsoft.Web/sites"
-    metric_name      = "Http5xx"
-    aggregation      = "Total"
+    metric_namespace = "microsoft.insights/components"
+    metric_name      = "requests/failed"
+    aggregation      = "Count"
     operator         = "GreaterThan"
     threshold        = 0
   }

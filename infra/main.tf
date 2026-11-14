@@ -215,13 +215,14 @@ resource "azurerm_function_app_flex_consumption" "api" {
     "LEADS_TABLE_ENDPOINT" = azurerm_storage_account.app.primary_table_endpoint
     "LEADS_TABLE_NAME"     = azurerm_storage_table.leads.name
     "KEY_VAULT_URI"        = azurerm_key_vault.app.vault_uri
-    "DOWNSTREAM_ENABLED"   = "false"
+    "DOWNSTREAM_ENABLED"   = "true"
   }
 
   auth_settings_v2 {
     auth_enabled           = true
-    require_authentication = false
-    unauthenticated_action = "AllowAnonymous"
+    require_authentication = true
+    unauthenticated_action = "Return401"
+    excluded_paths         = ["/api/health"]
 
     active_directory_v2 {
       client_id = "bb85dbd3-4f25-4318-8f1d-47b436ce9edb"
