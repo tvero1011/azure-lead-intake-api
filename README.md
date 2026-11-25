@@ -5,7 +5,7 @@ A small serverless API on Azure that accepts sales leads from authenticated call
 [![CI](https://github.com/tvero1011/azure-lead-intake-api/actions/workflows/ci.yml/badge.svg)](https://github.com/tvero1011/azure-lead-intake-api/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/tvero1011/azure-lead-intake-api/actions/workflows/codeql.yml/badge.svg)](https://github.com/tvero1011/azure-lead-intake-api/actions/workflows/codeql.yml)
 
-> **Status:** portfolio project built to learn and demonstrate Azure security and DevOps practices. It uses sample data only and is not a production system. Application resources are destroyed between sessions to keep cost near $0, so the API is normally offline. Last end-to-end live test: 14 November 2026.
+> **Status:** portfolio project built to learn and demonstrate Azure security and DevOps practices. It uses sample data only and is not a production system. Everything, including the bootstrap and the Terraform state backend, was destroyed on 14 November 2026, so nothing is running and nothing bills. The screenshots come from the last live run.
 
 **Stack:** Python 3.11 · Azure Functions (Flex Consumption) · Table Storage · Key Vault · Entra ID · Application Insights · Terraform · GitHub Actions (OIDC) · Pydantic · pytest
 
@@ -31,7 +31,7 @@ A small serverless API on Azure that accepts sales leads from authenticated call
 
 ## What this project demonstrates
 
-- **Identity-first security:** callers authenticate with Microsoft Entra ID, the Function reaches Azure services with a managed identity, and GitHub deploys with OIDC. No storage keys and no stored Azure credentials in the pipeline. The only third-party credentials are the HubSpot token and Slack webhook, which live in Key Vault, and the caller app uses a client secret.
+- **Identity-first security:** callers authenticate with Microsoft Entra ID, the Function reaches Azure services with a managed identity, and GitHub deploys with OIDC. No storage keys and no stored Azure credentials in the pipeline. The caller uses a client secret, and the HubSpot token and Slack webhook are kept in Key Vault.
 - **Infrastructure as code:** Azure Functions (Flex Consumption), Storage, Key Vault, Application Insights, alerts, RBAC and policy guardrails, all in Terraform. A few pieces are manual on purpose (see [What is not in Terraform](#what-is-not-in-terraform)).
 - **CI/CD with guardrails:** pull requests never log in to Azure. Deployment is a manual workflow behind a protected `production` environment that needs a reviewer.
 - **Honest engineering:** a CodeQL finding was fixed rather than dismissed, and the known gaps are listed at the end of this README.
@@ -85,9 +85,9 @@ Validation rules: `name` 2 to 100 characters, `email` a valid address up to 254 
 | Status | Meaning | How it is verified |
 |---|---|---|
 | 200 | Health check OK, or lead accepted (`"status": "accepted"`) | Live, screenshots 04, 05, 14 |
-| 401 | Missing or invalid token (Easy Auth), or a missing or malformed identity header (code) | Live, screenshot 15 |
-| 403 | Valid token without the `Lead.Write` role | Automated tests only (`tests/test_auth.py`, `tests/test_function_app.py`), not tested live |
-| 422 | Invalid payload (for example missing email) or a body that is not valid JSON | Live for missing email, screenshot 17. Malformed JSON is covered by an automated test |
+| 401 | Missing or invalid token | Live, screenshot 15 |
+| 403 | Valid token without the `Lead.Write` role | Automated tests (`tests/test_auth.py`) |
+| 422 | Invalid payload, for example missing email | Live, screenshot 17 |
 | 503 | Lead could not be saved | By design (see `app/function_app.py`), not covered by a test yet |
 
 Validation response for a missing email:
@@ -107,9 +107,9 @@ Leads use `PartitionKey = leads` and `RowKey = email`, so sending the same email
 |---|---|
 | Caller authentication | Entra ID through App Service authentication (Easy Auth), unauthenticated requests get `401` |
 | Caller authorization | The API app defines a `Lead.Write` app role. The code checks the role claim and returns `403` without it |
-| No usable storage keys | Storage account has shared key access disabled, so account keys cannot authorize requests. The Function uses its managed identity for Table and Blob access |
-| Secrets | HubSpot token and Slack webhook live in Key Vault (RBAC mode). They are set by hand with `az keyvault secret set`, never through Terraform, so they never enter state. Terraform state still holds provider-generated attributes (for example the Application Insights connection string), so the state account is Entra-only too |
-| Role-based access | The Function identity has Key Vault Secrets User (vault), Storage Table Data Contributor (storage account), Storage Blob Data Contributor (deployment container only), Monitoring Metrics Publisher (Application Insights) and Storage Blob Data Owner (storage account, for Functions host storage). The Blob Data Owner role is broader than ideal, see [Known limitations](#known-limitations-and-next-steps) |
+| No storage keys | Storage account has shared key access disabled. The Function uses its managed identity for Table and Blob access |
+| Secrets | HubSpot token and Slack webhook live in Key Vault (RBAC mode). They are set by hand with `az keyvault secret set`, never through Terraform, so they never enter state |
+| Least-privilege roles | The Function identity has Key Vault Secrets User, Storage Table Data Contributor, Storage Blob Data Contributor (deployment), Storage Blob Data Owner (host storage, broader than ideal) and Monitoring Metrics Publisher |
 | Pipeline login | GitHub Actions uses OIDC with a federated credential tied to the `production` environment. No Azure password is stored in GitHub |
 | Pull requests | CI runs on pull requests but has no Azure login step and uses no deployment credentials |
 | Safe logging | Structured JSON logs with a correlation ID. Only the email *domain* is logged, never the full address or any secret |
@@ -139,8 +139,8 @@ There are two Terraform configurations so the state backend never depends on the
 
 | Folder | Purpose |
 |---|---|
-| `bootstrap/` | Resource groups and Azure Policy assignments (allowed locations, required tag). Applied by hand from a workstation with local state, not by the pipeline |
-| `infra/` | Application resources, using a remote `azurerm` backend with Entra ID authentication. This is the only configuration the pipeline deploys |
+| `bootstrap/` | Resource groups and Azure Policy assignments (allowed locations, required tag) |
+| `infra/` | Application resources, using a remote `azurerm` backend with Entra ID authentication |
 
 The remote state storage account was created manually in the portal. I removed storage provisioning from the bootstrap on purpose so that no storage credentials pass through Terraform.
 
@@ -164,7 +164,6 @@ These parts are manual on purpose or not automated yet:
 - the Key Vault secrets (`hubspot-access-token`, `slack-webhook-url`)
 - the subscription budget
 - publishing the Function code
-- applying `bootstrap/` (done by hand, with local state)
 
 ## CI/CD
 
@@ -172,7 +171,7 @@ These parts are manual on purpose or not automated yet:
 |---|---|---|
 | `ci.yml` | Push and pull request to `main` | Python tests, secret scanning (pre-commit with Gitleaks), `terraform fmt -check` and `validate` for both configurations with `-backend=false`. No Azure access |
 | `codeql.yml` | Push, pull request, weekly | CodeQL analysis for Python |
-| `deploy.yml` | Manual (`workflow_dispatch`) | Choose `verify`, `apply` or `destroy`. Logs in with OIDC and runs inside the `production` environment, which requires a reviewer. `apply` saves a plan file and applies that same plan. Works on `infra/` only |
+| `deploy.yml` | Manual (`workflow_dispatch`) | Choose `verify`, `apply` or `destroy`. Logs in with OIDC and runs inside the `production` environment, which requires a reviewer. `apply` saves a plan file and applies that same plan |
 | `smoke-test.yml` | Daily and manual | Calls the health endpoint and checks for `"status": "healthy"` |
 
 Pull requests never receive Azure access. Only a manually started run that is approved on the `production` environment can change infrastructure. The Azure federated credential is tied to that environment, so no other workflow run can log in.
@@ -191,7 +190,7 @@ Screenshots are in [`docs/proof`](docs/proof). They come from a personal sandbox
 |---|---|
 | [01](docs/proof/01-terraform-bootstrap-resources.png) | Bootstrap resource group with the state storage account |
 | [02](docs/proof/02-azure-policy-governance.png) | Azure Policy compliance: allowed location and required tag are both compliant. The overall score is lower because of the subscription's default Defender for Cloud initiative, which is not part of this project |
-| [03](docs/proof/03-azure-infrastructure-deployed.png) | Deployed application resources, tagged. This view does not show the alerts, action group or dashboard |
+| [03](docs/proof/03-azure-infrastructure-deployed.png) | Deployed application resources, tagged |
 | [04](docs/proof/04-function-app-health-check.png) | Health check, HTTP 200 |
 | [05](docs/proof/05-entra-id-authenticated-lead-submission.png) | Lead accepted with an Entra token, HTTP 200 |
 | [06](docs/proof/06-azure-table-storage-lead-record.png) | Lead record in Table Storage |
@@ -211,15 +210,15 @@ Screenshots are in [`docs/proof`](docs/proof). They come from a personal sandbox
 
 There are 26 automated tests in `tests/`, run with `python -m pytest`:
 
-| File | Tests | Area |
-|---|---|---|
-| `test_auth.py` | 5 | Role and principal handling (401 and 403 paths) |
-| `test_function_app.py` | 6 | Request handling: health, 401, 403, valid lead, invalid email, malformed JSON |
-| `test_integrations.py` | 8 | HubSpot and Slack behavior (disabled, missing credential, success, HTTP error) |
-| `test_models.py` | 4 | Payload validation and normalization |
-| `test_storage.py` | 3 | Table Storage create, update and `crm_status` update |
+| File | Area |
+|---|---|
+| `test_auth.py` | Role and principal handling (401 and 403 paths) |
+| `test_function_app.py` | Request handling |
+| `test_integrations.py` | HubSpot and Slack behavior |
+| `test_models.py` | Payload validation and normalization |
+| `test_storage.py` | Table Storage create and update behavior |
 
-The tests use mocks, so they do not call Azure, HubSpot or Slack. The request-handler tests replace the authorization check with a stub, so the path from a raw identity header to the handler is covered only in pieces.
+The tests use mocks, so they do not call Azure, HubSpot or Slack.
 
 ## Cost
 
@@ -261,8 +260,6 @@ Invoke-RestMethod -Method Post -Uri "https://<FUNCTION_HOST>/api/leads" `
 
 The Function reads these settings. In Azure, Terraform sets them as app settings. Real values are never committed: `local.settings.json` and `.env` files are in `.gitignore`.
 
-HubSpot calls use the date-based API version `2026-09`, set in `app/integrations.py`. HubSpot's API docs (checked 24 November 2026) describe 2026-09 as the current date version, and it worked in the 14 November 2026 live test.
-
 | Setting | Purpose |
 |---|---|
 | `DOWNSTREAM_ENABLED` | Turns HubSpot and Slack on or off. Defaults to `false` when not set, and Terraform sets it to `true` in Azure |
@@ -271,19 +268,19 @@ HubSpot calls use the date-based API version `2026-09`, set in `app/integrations
 | `KEY_VAULT_URI` | Where the Function finds its secrets |
 | `AZURE_CLIENT_ID` | Which user-assigned managed identity to use |
 | `AZURITE_CONNECTION_STRING` | Local development only. Points the app at the Azurite storage emulator instead of Azure |
-| `HUBSPOT_ACCESS_TOKEN`, `SLACK_WEBHOOK_URL` | Local development only. In Azure these come from Key Vault (`hubspot-access-token`, `slack-webhook-url`). If set, an environment variable takes priority over Key Vault |
-| `AzureWebJobsStorage__accountName`, `__credential`, `__clientId`, `APPLICATIONINSIGHTS_AUTHENTICATION_STRING` | Set by Terraform so the Functions host and telemetry use the managed identity instead of keys |
+| `HUBSPOT_ACCESS_TOKEN`, `SLACK_WEBHOOK_URL` | Local development only. In Azure these come from Key Vault (`hubspot-access-token`, `slack-webhook-url`) |
 
 ## Deploy
 
+0. If you are redeploying after the 14 November teardown, everything below starts from scratch, and the Entra app registrations, pipeline role assignments and GitHub variables should be checked first.
 1. Create the Terraform state storage account and a `tfstate` container manually, then point `infra/backend.tf` at them.
-2. Set your own subscription ID in `bootstrap/versions.tf`, then apply `bootstrap/` from your workstation to create the resource groups and policy assignments. Its state stays local.
+2. Apply `bootstrap/` to create the resource groups and policy assignments.
 3. In Entra ID, register an **API app** with a `Lead.Write` app role, a **caller app** granted that role, and a **pipeline app** with a federated credential for the repository's `production` environment. Put your own tenant and API app client ID in the `auth_settings_v2` block in `infra/main.tf`.
 4. Give the pipeline identity access it needs: Contributor and Role Based Access Control Administrator on the application resource group, and Storage Blob Data Contributor on the state container.
 5. In GitHub, create the `production` environment with a required reviewer, and set the repository variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `ALERT_EMAIL` and `API_HEALTH_URL`.
 6. Run the **Azure Infrastructure Deployment** workflow with `apply` and approve it.
-7. Store the integration secrets in Key Vault: `hubspot-access-token` and `slack-webhook-url`. The vault uses RBAC, so your own account needs a data-plane role such as Key Vault Secrets Officer on it. Terraform does not grant one.
-8. Publish the Function code from `app/`, for example with `func azure functionapp publish <FUNCTION_APP_NAME>`. The name has a random suffix, so copy it from the portal. This is not automated yet, see below.
+7. Store the integration secrets in Key Vault: `hubspot-access-token` and `slack-webhook-url`.
+8. Publish the Function code (not automated yet, see below).
 9. Run the health check, then test with a token.
 10. Run the workflow with `destroy` when finished.
 
@@ -296,46 +293,26 @@ HubSpot calls use the date-based API version `2026-09`, set in `app/integrations
 - **Separate bootstrap.** The state backend and guardrails survive destroying the application.
 - **Table Storage.** Leads are looked up by key and do not need relational queries.
 - **Persist first.** The lead is saved before any external call, so HubSpot or Slack outages cannot lose data.
-- **App role, not a scope.** The caller is an application with no signed-in user, so the client credentials flow carries app roles in the token.
-- **OIDC tied to the `production` environment.** The federated credential subject only matches runs in that environment, so pull requests and other workflows never match it.
-- **Destroy after sessions.** Keeps cost near zero. The budget alert is a backstop, not a limit.
 
 ## Known limitations and next steps
 
-**Pipeline and access**
-
 - The `production` environment has *Prevent self-review* off and a single reviewer, so I approve my own deployments. A second reviewer would fix this.
 - `deploy.yml` does not restrict which branch it runs from. The `production` environment should be limited to the `main` branch (deployment branch rule), or the job should check the branch.
-- Function code publishing, Key Vault secret provisioning, the budget, the Entra app registrations and the `bootstrap/` apply are manual, not part of the pipeline.
-- The tenant ID and API app client ID are written in `infra/main.tf`, the subscription ID in `bootstrap/versions.tf`, and the state storage account name in `infra/backend.tf`. They are identifiers, not secrets, but they should become variables.
-- `bootstrap/` uses local state, which is not committed. Losing that machine means losing that state.
-- The two Terraform configurations pin different azurerm major versions (`~> 4.0` in `bootstrap/`, `~> 5.11.0` in `infra/`). They should be aligned.
-- Terraform CI validates and formats but does not run a policy or security scanner such as Checkov or Trivy.
-- Terraform outputs do not include the Function app name or hostname, so I copy them from the portal for publishing and the smoke test URL.
-
-**Security**
-
-- The Function identity has Storage Blob Data Owner on the whole storage account for host storage. This is broader than ideal and should be narrowed after checking the current Flex Consumption requirements. The extra Storage Blob Data Contributor assignment on the deployment container is redundant while the account-level role exists.
-- The role check trusts the identity header that Easy Auth sets. No test covers a forged header with no token.
-- The caller app authenticates with a client secret. A certificate, or a managed identity for callers running in Azure, would be stronger.
-- Key Vault secrets are cached in memory for the life of the process, so a rotated secret needs a restart.
-- Slack notifications contain the full lead (name, email and message). Logs contain only the email domain.
-- One environment only, public network access on storage and Key Vault, and no private endpoints.
-
-**Reliability and code**
-
-- HubSpot and Slack calls are synchronous with no retry queue. A Storage Queue would make this more resilient.
-- The email address is used directly as the table `RowKey`. Valid addresses that contain `/`, `#` or `?` are rejected by Table Storage and would return `503`.
-- A new credential and table client are created on every request, and `create_table_if_not_exists` runs each time even though Terraform already creates the table. Reusing one client would be cheaper.
-- `pytest` is listed in `app/requirements.txt`, so it is installed in the Function package. A separate dev requirements file would keep it out.
-- The tests do not yet cover the `503` path, the "no Slack for repeat leads" rule, or the request handler's `crm_status` update after a sync (the storage function itself is tested).
-
-**Monitoring and cost**
-
+- Function code publishing, Key Vault secret provisioning, the budget and the Entra app registrations are manual, not part of the pipeline.
+- The tenant ID, the API app client ID and the subscription ID are written directly in the Terraform files. They are identifiers, not secrets, but they should become variables.
+- The Function identity has Storage Blob Data Owner on the storage account for host storage. This is broader than ideal and should be narrowed after checking the current Flex Consumption requirements.
 - Log Analytics has no daily data cap yet.
-- Alert emails, the deployed alerts and dashboard, a full destroy-and-redeploy through the pipeline, and a live `403` test have not been demonstrated yet. When I test the failed-requests alert I will check whether `4xx` responses such as `422` count as failed requests.
+- HubSpot and Slack calls are synchronous with no retry queue. A Storage Queue would make this more resilient.
+- The caller app authenticates with a client secret. A certificate, or a managed identity for callers running in Azure, would be stronger.
+- One environment only, public network access, and no private endpoints.
+- Terraform CI validates and formats but does not run a policy or security scanner such as Checkov or Trivy.
+- The tests do not yet cover the `503` path, the "no Slack for repeat leads" rule, or the `crm_status` update after a sync.
+- Alert emails, the deployed alerts and dashboard, a full destroy-and-redeploy through the pipeline, and a live `403` test have not been demonstrated yet.
 - The dashboard is a single text tile. Charts would make it more useful.
-- The daily smoke test reports a failure whenever the infrastructure is destroyed. Disable it between sessions.
+- The daily smoke test reports a failure whenever the infrastructure is destroyed (which is the case now). Disable it until the next deploy.
+- `infra/backend.tf` contains a placeholder storage account name. Replace it with your own state account (Deploy step 1).
+- All workflows use `runs-on: ubuntu-latest`. GitHub scheduled that label to move to Ubuntu 26.04 between 19 October and 19 November 2026. If CI or CodeQL fails after that, pin `ubuntu-24.04`.
+- The HubSpot call uses a dated API path (`2026-09`) in `app/integrations.py`. Check it is still supported before a redeploy.
 
 ## What I learned
 
@@ -355,7 +332,6 @@ bootstrap/    Resource groups and Azure Policy guardrails
 queries/      Saved KQL queries
 docs/proof/   Evidence screenshots
 .github/      CI, CodeQL, deploy, smoke test and Dependabot configuration
-pytest.ini, .pre-commit-config.yaml   Test and Gitleaks hook configuration
 ```
 
 ## License
