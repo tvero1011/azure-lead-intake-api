@@ -26,7 +26,8 @@ A small serverless API on Azure that accepts sales leads from authenticated call
 [Configuration](#configuration) ·
 [Deploy](#deploy) ·
 [Design decisions](#design-decisions) ·
-[Known limitations](#known-limitations-and-next-steps) ·
+[Known limitations](#known-limitations) ·
+[Future improvements](#future-improvements) ·
 [What I learned](#what-i-learned)
 
 ## What this project demonstrates
@@ -294,25 +295,34 @@ The Function reads these settings. In Azure, Terraform sets them as app settings
 - **Table Storage.** Leads are looked up by key and do not need relational queries.
 - **Persist first.** The lead is saved before any external call, so HubSpot or Slack outages cannot lose data.
 
-## Known limitations and next steps
+## Known limitations
 
-- The `production` environment has *Prevent self-review* off and a single reviewer, so I approve my own deployments. A second reviewer would fix this.
-- `deploy.yml` does not restrict which branch it runs from. The `production` environment should be limited to the `main` branch (deployment branch rule), or the job should check the branch.
-- Function code publishing, Key Vault secret provisioning, the budget and the Entra app registrations are manual, not part of the pipeline.
-- The tenant ID, the API app client ID and the subscription ID are written directly in the Terraform files. They are identifiers, not secrets, but they should become variables.
-- The Function identity has Storage Blob Data Owner on the storage account for host storage. This is broader than ideal and should be narrowed after checking the current Flex Consumption requirements.
-- Log Analytics has no daily data cap yet.
-- HubSpot and Slack calls are synchronous with no retry queue. A Storage Queue would make this more resilient.
-- The caller app authenticates with a client secret. A certificate, or a managed identity for callers running in Azure, would be stronger.
-- One environment only, public network access, and no private endpoints.
-- Terraform CI validates and formats but does not run a policy or security scanner such as Checkov or Trivy.
-- The tests do not yet cover the `503` path, the "no Slack for repeat leads" rule, or the `crm_status` update after a sync.
-- Alert emails, the deployed alerts and dashboard, a full destroy-and-redeploy through the pipeline, and a live `403` test have not been demonstrated yet.
-- The dashboard is a single text tile. Charts would make it more useful.
-- The daily smoke test reports a failure whenever the infrastructure is destroyed (which is the case now). Disable it until the next deploy.
-- `infra/backend.tf` contains a placeholder storage account name. Replace it with your own state account (Deploy step 1).
-- All workflows use `runs-on: ubuntu-latest`. GitHub scheduled that label to move to Ubuntu 26.04 between 19 October and 19 November 2026. If CI or CodeQL fails after that, pin `ubuntu-24.04`.
-- The HubSpot call uses a dated API path (`2026-09`) in `app/integrations.py`. Check it is still supported before a redeploy.
+- **Pipeline and access:**
+  - The `production` environment has *Prevent self-review* off and a single reviewer, so I approve my own deployments.
+  - `deploy.yml` does not restrict which branch it runs from.
+  - Function code publishing, Key Vault secret provisioning, the budget and the Entra app registrations are manual, not part of the pipeline.
+  - Terraform CI validates and formats but has no policy or security scanner such as Checkov or Trivy.
+  - All workflows use `runs-on: ubuntu-latest`, which GitHub scheduled to move to Ubuntu 26.04 between 19 October and 19 November 2026. If CI or CodeQL fails, pin `ubuntu-24.04`.
+- **Identity and secrets:**
+  - The Function identity has Storage Blob Data Owner on the storage account for host storage, which is broader than ideal.
+  - The caller app authenticates with a client secret.
+  - The tenant ID, API app client ID and subscription ID are written directly in the Terraform files. They are identifiers, not secrets, but should be variables.
+- **Resilience and scale:** HubSpot and Slack calls are synchronous with no retry queue. There is one environment, public network access, no private endpoints, and no daily data cap on Log Analytics.
+- **Testing and evidence:**
+  - The tests do not cover the `503` path, the "no Slack for repeat leads" rule, or the `crm_status` update after a sync.
+  - Alert emails, the deployed alerts and dashboard, a full destroy-and-redeploy through the pipeline, and a live `403` test have not been demonstrated.
+  - The dashboard is a single text tile.
+- **Before a redeploy:**
+  - The daily smoke test fails whenever the infrastructure is destroyed, so disable it until the next deploy.
+  - `infra/backend.tf` has a placeholder storage account name (Deploy step 1).
+  - The HubSpot call uses a dated API path (`2026-09`) in `app/integrations.py`; check it is still supported.
+
+## Future improvements
+
+1. **Pipeline:** add a second reviewer and turn on *Prevent self-review*, limit the `production` environment to the `main` branch, and add Checkov or Trivy to Terraform CI.
+2. **Identity and secrets:** narrow the Blob Data Owner role after checking current Flex Consumption requirements, use a certificate or managed identity for callers, and move the tenant, client and subscription IDs into variables.
+3. **Resilience:** put a Storage Queue in front of HubSpot and Slack for retries, set a Log Analytics daily cap, and add private endpoints and a second environment.
+4. **Proof:** add tests for the `503` path, the repeat-lead rule and `crm_status`, demonstrate alerts and a live `403`, run a full destroy-and-redeploy through the pipeline, and turn the dashboard into charts.
 
 ## What I learned
 
