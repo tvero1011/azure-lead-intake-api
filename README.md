@@ -344,10 +344,6 @@ docs/proof/   Evidence screenshots
 .github/      CI, CodeQL, deploy, smoke test and Dependabot configuration
 ```
 
-## License
-
-MIT, see [LICENSE](LICENSE).
-
 ## Author
 
 Built by [tvero1011](https://github.com/tvero1011) as a cloud and DevOps portfolio project.
